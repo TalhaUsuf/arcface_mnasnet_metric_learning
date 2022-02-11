@@ -3,6 +3,7 @@ import timm
 from gc import callbacks
 import logging
 from xml.etree.ElementTree import Comment
+from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 import json
 import matplotlib.pyplot as plt
 import numpy as np
@@ -247,8 +248,8 @@ class mnasnet_embedder(pl.LightningModule):
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     def forward(self, x):
         # given a batch `x` ---> generate the embedding vector
-        x = self.trunk(x)  # 512 , feature extractor dims.
-        x = self.embedder(x) # get the embedding using features as input
+        x = self.trunk(x)  # Mnasnet 512 , feature extractor dims.
+        x = self.embedder(x) # MLP get the embedding using features as input
         return x
     
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -283,8 +284,8 @@ class mnasnet_embedder(pl.LightningModule):
         
     def configure_optimizers(self):
         
-        self.optimizer_model = torch.optim.Adam(self.params_list, lr=self.lr)
-        self.scheduler_model = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_model, T_max=self.t_max, eta_min=self.min_lr)
+        self.optimizer_trunk = torch.optim.Adam(self.trunk_model.parameters(), lr=self.lr_trunk)
+        self.scheduler_trunk = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_model, T_max=self.t_max, eta_min=self.min_lr)
 
         self.optimizer_arcface = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr)
         self.scheduler_arcface = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_arcface, T_max=self.t_max, eta_min=self.min_lr)
