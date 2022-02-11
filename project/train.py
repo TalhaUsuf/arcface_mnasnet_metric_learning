@@ -285,11 +285,11 @@ class mnasnet_embedder(pl.LightningModule):
         
     def configure_optimizers(self):
         
-        optimizer_trunk = torch.optim.Adam(self.trunk_model.parameters(), lr=self.lr_trunk)
+        optimizer_trunk = torch.optim.Adam(self.trunk.parameters(), lr=self.lr_trunk)
         lr_scheduler_trunk = LinearWarmupCosineAnnealingLR(optimizer_trunk, self.warmup_epochs, self.trainer.max_epochs,
                                                      warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
         
-        optimizer_embedder = torch.optim.Adam(self.embedder_model.parameters(), lr=self.lr_embedder)
+        optimizer_embedder = torch.optim.Adam(self.embedder.parameters(), lr=self.lr_embedder)
         lr_scheduler_embedder = LinearWarmupCosineAnnealingLR(optimizer_embedder, self.warmup_epochs, self.trainer.max_epochs,
                                                      warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
         
