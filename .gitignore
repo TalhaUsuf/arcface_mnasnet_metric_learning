@@ -130,3 +130,4 @@ MNIST
 *.csv
 tmp
 arcface_mnasnet
+wandb

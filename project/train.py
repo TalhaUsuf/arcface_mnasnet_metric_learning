@@ -1,4 +1,4 @@
-from project.dataset_cls import identities_ds
+from dataset_cls import identities_ds
 import timm
 from gc import callbacks
 import logging
