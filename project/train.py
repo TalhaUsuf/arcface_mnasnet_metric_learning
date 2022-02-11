@@ -284,13 +284,27 @@ class mnasnet_embedder(pl.LightningModule):
         
     def configure_optimizers(self):
         
-        self.optimizer_trunk = torch.optim.Adam(self.trunk_model.parameters(), lr=self.lr_trunk)
-        self.scheduler_trunk = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_model, T_max=self.t_max, eta_min=self.min_lr)
-
-        self.optimizer_arcface = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr)
-        self.scheduler_arcface = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_arcface, T_max=self.t_max, eta_min=self.min_lr)
+        optimizer_trunk = torch.optim.Adam(self.trunk_model.parameters(), lr=self.lr_trunk)
+        lr_scheduler_trunk = LinearWarmupCosineAnnealingLR(optimizer_trunk, self.warmup_epochs, self.trainer.max_epochs,
+                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
         
-        return [self.optimizer_model, self.optimizer_arcface], [ {"scheduler":self.scheduler_model, "name":"model_lr"}, {"scheduler" : self.scheduler_arcface, "name" : "arcface_lr"} ]
+        optimizer_embedder = torch.optim.Adam(self.embedder_model.parameters(), lr=self.lr_embedder)
+        lr_scheduler_embedder = LinearWarmupCosineAnnealingLR(optimizer_embedder, self.warmup_epochs, self.trainer.max_epochs,
+                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
+        
+        optimizer_arcface_clf = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr_arcface)
+        lr_scheduler_arcface = LinearWarmupCosineAnnealingLR(optimizer_arcface_clf, self.warmup_epochs, self.trainer.max_epochs,
+                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
+        
+
+        # self.optimizer_arcface = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr)
+        # self.scheduler_arcface = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_arcface, T_max=self.t_max, eta_min=self.min_lr)
+        
+        return [optimizer_trunk, 
+                optimizer_embedder, 
+                optimizer_arcface_clf], [ {"scheduler":lr_scheduler_trunk, "name":"trunk_lr"},
+                                         {"scheduler":lr_scheduler_embedder, "name":"embedder_lr"}, 
+                                         {"scheduler" : lr_scheduler_arcface, "name" : "arcface_lr"} ]
 
 
 
