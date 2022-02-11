@@ -1,5 +1,5 @@
-
-
+from project.dataset_cls import identities_ds
+import timm
 from gc import callbacks
 import logging
 from xml.etree.ElementTree import Comment
@@ -43,9 +43,10 @@ logging.info("VERSION %s" % pytorch_metric_learning.__version__)
 
 
 
-class mnist_embedder(pl.LightningModule):
+class mnasnet_embedder(pl.LightningModule):
     def __init__(self, 
-                root_dataset, 
+                train : str = "project/train.csv", 
+                valid : str = "project/valid.csv", 
                 embed_sz : int = 128, 
                 batch_size : int = 128, 
                 lr : float = 0.0001, 
@@ -55,54 +56,73 @@ class mnist_embedder(pl.LightningModule):
                 samples_per_iter : int = 20,
                 **kwargs):
 
-        super(mnist_embedder, self).__init__()
+        super(mnasnet_embedder, self).__init__()
 
         self.save_hyperparameters()
         self.min_lr = min_lr
         self.t_max = t_max
         self.image_sz = image_size
         self.embed_sz = embed_sz
-        self.root = root_dataset
+        self.train = train
+        self.valid = valid
         self.batch_size = batch_size
         self.lr = lr
         self.samples_per_iter = samples_per_iter
         
         self.train_transform = transforms.Compose(
                                                         [
-                                                            transforms.Resize(self.image_sz),
-                                                            transforms.RandomResizedCrop(scale=(0.16, 1), ratio=(0.75, 1.33), size=self.image_sz),
-                                                            transforms.RandomHorizontalFlip(0.5),
-                                                            transforms.ToTensor(), # [C, H, W]
-                                                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                                            transforms.Resize(size=self.img_sz),
+                                                            transforms.ToTensor(),
+                                                            transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
                                                 )       
+
         
         self.val_transform = transforms.Compose(
                                                         [
-                                                            transforms.Resize(self.image_sz),
-                                                            transforms.ToTensor(), # [C, H, W]
-                                                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                                            transforms.Resize(size=self.img_sz),
+                                                            transforms.ToTensor(),
+                                                            transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
                                                 )
+        
+        
+        
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
         #            defining the [trunk ----> embedder] model
-        #                       Trunk : resnet                                                
-        #                       Embedder : MLP                                                 
+        #                       Trunk : Mnasnet                                                
+        #                       Embedder : MLP
+        #                       Classifier : ArcFace                                                 
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
-        self.trunk = torchvision.models.resnet18(pretrained=True)
+        
+        # ==========================================================================
+        #                             trunk                                  
+        # ==========================================================================
+        self.trunk = timm.create_model('mnasnet_100', pretrained=True)
+        # put backbone in train mode
+        self.trunk.train()
+        
+        in_features = self.trunk.classifier.in_features
+        
+        # replace the classifier layer with identity layer
+        self.trunk.classifier = nn.Identity()
+        # make trunk wholly trainable        
         for p in self.trunk.parameters():
             p.requires_grad = True
-        # replacing the end-classifier with a Identity layer
-        self.trunk_output_size = self.trunk.fc.in_features
-        self.trunk.fc = common_functions.Identity() # clf replaced by identity layer
-
+            
+        self.trunk_output_size = in_features
+        # ==========================================================================
+        #                             embedder                                  
+        # ==========================================================================
+        # define embedder
         self.embedder = self.get_embedder(self.trunk_output_size, self.embed_sz)
 
-        # self.model = torch.nn.Sequential([
-        #                                         self.trunk,
-        #                                         self.embedder
-        #                                     ])
-        self.params_list = list(self.trunk.parameters()) + list(self.embedder.parameters())
+        # ==========================================================================
+        #                             classification head                                  
+        # ==========================================================================
+        
+        #DEFINED LATER IN SETUP FUNCTION
+        
         # Console().print(list(self.trunk.parameters()))
         # Set the mining function
         self.record_keeper, _, _ = logging_presets.get_record_keeper(
@@ -144,47 +164,9 @@ class mnist_embedder(pl.LightningModule):
                    "captions" : wandb.Html(f"<h1>epoch_{self.current_epoch}</h1>"),
                    "epoch" : self.current_epoch,})
         plt.close(fig)
-    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    # This will be used to create train and val sets that are class-disjoint
-    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    class ClassDisjointCIFAR100(torch.utils.data.Dataset):
-        def __init__(self, original_train, original_val, train, transform):
-            super().__init__()
-            # if train flag is true then it will allow only indices below 50
-            # if train flag is flag then it will allow only indices above 50
-            rule = (lambda x: x < 50) if train else (lambda x: x >= 50)
-            train_filtered_idx = [i for i, x in enumerate(original_train.targets) if rule(x)]   
-            val_filtered_idx = [i for i, x in enumerate(original_val.targets) if rule(x)]
-
-            # combine the training data from both original train as well as original val. dataset
-            self.data = np.concatenate(
-                                        [
-                                            original_train.data[train_filtered_idx],
-                                            original_val.data[val_filtered_idx],
-                                        ],
-                                        axis=0,
-                                    )
-            self.targets = np.concatenate(
-                                            [
-                                                np.array(original_train.targets)[train_filtered_idx],
-                                                np.array(original_val.targets)[val_filtered_idx],
-                                            ],
-                                            axis=0,
-                                        )
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.data)
-
-        def __getitem__(self, index):
-            img, target = self.data[index], self.targets[index]
-            img = Image.fromarray(img)
-            if self.transform is not None:
-                img = self.transform(img)
-            return img, target
-
+  
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    #        classifier model defined
+    #        embedder model defined
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     class MLP(nn.Module):
         # layer_sizes[0] is the dimension of the input
@@ -209,7 +191,7 @@ class mnist_embedder(pl.LightningModule):
 
     def get_embedder(self, trunk_output_size : int, embed_sz : int = 64):
 
-        embedder = mnist_embedder.MLP([trunk_output_size, embed_sz])
+        embedder = mnasnet_embedder.MLP([trunk_output_size, embed_sz])
         return embedder
         
 
@@ -220,37 +202,24 @@ class mnist_embedder(pl.LightningModule):
         # Called only on single-GPU
 
         # don't assign the states, only process dataset
-
-        # download the datasets
-        datasets.CIFAR100(
-                            root=f"{self.root}/CIFAR100_Dataset", train=True, transform=None, download=True
-                            )
-        datasets.CIFAR100(
-                            root=f"{self.root}/CIFAR100_Dataset", train=False, transform=None, download=True
-                            )
+        pass
         
     def setup(self, stage=None):
         # Called on each GPU
 
-        # define the states
+        # define the states i.e. self.abc
 
         # DOWNLOAD THE ORIGINAL DATASETS
-        self.original_train = datasets.CIFAR100(
-                                                    root=f"{self.root}/CIFAR100_Dataset", train=True, transform=None, download=True
-                                                )
-        self.original_val = datasets.CIFAR100(
-                                                    root=f"{self.root}/CIFAR100_Dataset", train=False, transform=None, download=True
-                                                )
+       
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         #           Making the dis-joint datasets
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # Class disjoint training and validation set
-        self.train_dataset = mnist_embedder.ClassDisjointCIFAR100(
-                                                        self.original_train, self.original_val, train=True, transform=self.train_transform
-                                                    )
-        self.val_dataset = mnist_embedder.ClassDisjointCIFAR100(
-                                                        self.original_train, self.original_val, train=False, transform=self.val_transform
-                                                 )
+        self.train_dataset = identities_ds(self.train, self.train_transform)
+                                                    
+        self.val_dataset = identities_ds(self.valid, self.val_transform)
+        
+        # needed by embedding-tester                                                        
         self.dataset_dict = {"val": self.val_dataset}
         self.classes_in_training = np.unique(self.train_dataset.targets)
 
@@ -263,6 +232,7 @@ class mnist_embedder(pl.LightningModule):
         # loss function layer needs the no. of classes
         # see : https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/TrainWithClassifier.ipynb
         self.arcface_loss_layer = losses.ArcFaceLoss(len(self.classes_in_training), self.embed_sz, margin=28.6, scale=64)
+        
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=6, pin_memory=True, prefetch_factor=24, persistent_workers=True, sampler=self.sampler)
@@ -270,7 +240,7 @@ class mnist_embedder(pl.LightningModule):
 
     def val_dataloader(self):
         # return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=4)
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=12)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=6)
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #                pl-lightning realted functions
@@ -279,13 +249,12 @@ class mnist_embedder(pl.LightningModule):
         # given a batch `x` ---> generate the embedding vector
         x = self.trunk(x)  # 512 , feature extractor dims.
         x = self.embedder(x) # get the embedding using features as input
-        # x = self.model(x)
         return x
     
     def training_step(self, batch, batch_idx, optimizer_idx):
         # generate the embedding
         images, labels = batch
-        embedding = self(images)
+        embedding = self(images) # everything in forward  will be executed
 
         # get the hard examples        
         miner_output = self.miner(embedding, labels) # in your training for-loop
@@ -327,15 +296,10 @@ class mnist_embedder(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
 
-        # root_dataset, 
-        #         embed_sz : int = 128, 
-        #         batch_size : int = 128, 
-        #         lr : float = 0.0001, 
-        #         img_sz : int = 64):
-
 
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--root_dataset", type=str, default="./", help="dir.at where to download the datasets")
+        parser.add_argument("--train", type=str, default="project/train.csv", help="path to the train.csv file")
+        parser.add_argument("--valid", type=str, default="project/valid.csv", help="path to the valid.csv file")
         parser.add_argument("--embed_sz", type=int, default=128, help="embedding size")
         parser.add_argument("--batch_size", type=int, default=128, help="batch size for dataloader")
         parser.add_argument("--lr", type=float, default=0.0001, help="learning rate for the optimizer")
@@ -355,18 +319,6 @@ def cli_main(args=None):
     pl.seed_everything(1234)
 
     parser = ArgumentParser()
-    # parser.add_argument("--dataset", default="mnist", type=str, help="mnist, cifar10, stl10, imagenet")
-    # script_args, _ = parser.parse_known_args(args)
-
-    # if script_args.dataset == "mnist":
-    #     dm_cls = MNISTDataModule
-    # elif script_args.dataset == "cifar10":
-    #     dm_cls = CIFAR10DataModule
-    # elif script_args.dataset == "stl10":
-    #     dm_cls = STL10DataModule
-    # elif script_args.dataset == "imagenet":
-    #     dm_cls = ImagenetDataModule
-
     
     parser = pl.Trainer.add_argparse_args(parser)
     parser = mnist_embedder.add_model_specific_args(parser)

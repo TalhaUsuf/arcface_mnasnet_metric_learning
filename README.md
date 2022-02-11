@@ -87,3 +87,106 @@ trainer.test(test_dataloaders=test)
   year={Year}
 }
 ```   
+
+# Pre-processing
+
+## Dataset Dir.  📃
+
+|Dataset|Dir. |
+|:---|:---|
+|  Glint360k processed dataset | `/home/talha/metric_learning/glint360k_unpacked`  |
+|vggFace2 dataset|`/home/talha/metric_learning/train`|
+  
+
+## Image operations :hammer: 🗡️ 🔧
+
+ - Face detector
+ - face alignmment
+ - resize to `224x224`
+  
+> code is on Hasnain PC :tv:
+
+## Make a csv
+
+Here `train` has `vggface2` datset :green_book:  ⚠️ 
+
+```bash
+python preprocess/generate_csv.py --c project/dataset.csv --d /home/talha/metric_learning/train
+```
+
+flag options: 🇵🇰
+```
+flags:
+
+generate_csv.py:
+  --c: Path to save the csv file
+    (default: './dataset.csv')
+  --d: Path to vggface2 dataset
+    (default: 'images')
+```
+
+## Combine the csv files
+
+> ⚠️ in case of `glint360k` dataset, `generate_csv.py` was able to generate individual csv files ☑️ but stuck ⁉️ on combining them. In that case run below script:
+
+fast 🚥  way to combine the individual csv files
+
+```
+python preprocess/combine_csvs.py
+```
+It will create combined csv file `dataset.csv` inside the `preprocess` dir.
+
+
+FLAGs are defined below
+```
+optional arguments:
+  -h, --help  show this help message and exit
+  --d D       Path to dir containing the individual identitiy csv files
+  --c C       Path to save the dataset csv file
+```
+
+**More faster :zap: implementation USING DASK**
+
+```
+python preprocess/combine_csvs_dask.py
+```
+
+## Clean the csv files
+
+After avove operation there will be rows with `image, identity, label` in between the csvs, Remove those rows using this.
+
+```
+python preprocess/clean_rows.py --dir ./preprocess/dataset.csv  --csv ./preprocess/cleaned_dataset.csv
+```
+
+FLAGS 🇵🇰
+```
+optional arguments:
+  -h, --help         show this help message and exit
+  -d DIR, --dir DIR  Path to dir containing the dataset.csv file
+  -c CSV, --csv CSV  Path to save the cleaned csv file
+```
+
+## Split the csv
+
+Split the csv 🗒️ into **disjoint** ⚔️ datset csv files. This means train.csv will have different identities than valid.csv
+
+```bash
+python preprocess/disjoint_split.py  -c project/dataset.csv -t project/train.csv -v project/valid.csv -s 0.20
+```
+
+Flags 🇵🇰
+
+```
+optional arguments:
+  -h, --help            show this help message and exit
+  -c CSV, --csv CSV     csv file containing label, image and identity columns
+  -t TRAIN, --train TRAIN
+                        train csv file path to save
+  -v VALID, --valid VALID
+                        valid csv file path to save
+  -s SPLIT, --split SPLIT
+                        percentage of identities to use for test
+```
+
+
