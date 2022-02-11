@@ -48,31 +48,32 @@ class mnasnet_embedder(pl.LightningModule):
     def __init__(self, 
                 train : str = "project/train.csv", 
                 valid : str = "project/valid.csv", 
-                embed_sz : int = 128, 
-                batch_size : int = 128, 
-                lr : float = 0.0001, 
-                image_size : int = 64,
-                min_lr : float = 1e-8,
-                t_max : int = 50,
+                embed_sz : int = 256, 
+                batch_size : int = 200, 
+                image_size : int = 224,
                 samples_per_iter : int = 20,
+                lr_trunk : float = 0.00001,
+                lr_embedder : float = 0.0001, 
+                lr_arcface : float = 0.0001,
+                warmup_epochs : int = 2,
                 **kwargs):
 
         super(mnasnet_embedder, self).__init__()
 
         self.save_hyperparameters()
-        self.min_lr = min_lr
-        self.t_max = t_max
-        self.image_sz = image_size
+        self.image_size = image_size
         self.embed_sz = embed_sz
         self.train = train
         self.valid = valid
         self.batch_size = batch_size
-        self.lr = lr
         self.samples_per_iter = samples_per_iter
-        
+        self.lr_trunk = lr_trunk
+        self.lr_embedder = lr_embedder
+        self.lr_arcface = lr_arcface
+        self.warmup_epochs = warmup_epochs
         self.train_transform = transforms.Compose(
                                                         [
-                                                            transforms.Resize(size=self.img_sz),
+                                                            transforms.Resize(size=self.image_size),
                                                             transforms.ToTensor(),
                                                             transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
@@ -81,7 +82,7 @@ class mnasnet_embedder(pl.LightningModule):
         
         self.val_transform = transforms.Compose(
                                                         [
-                                                            transforms.Resize(size=self.img_sz),
+                                                            transforms.Resize(size=self.image_size),
                                                             transforms.ToTensor(),
                                                             transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
@@ -137,7 +138,7 @@ class mnasnet_embedder(pl.LightningModule):
                                                             visualizer=umap.UMAP(),
                                                             visualizer_hook=self.visualizer_hook,
                                                             dataloader_num_workers=4,
-                                                            batch_size=512,
+                                                            batch_size=self.batch_size,
                                                             # data_device=self.device,
                                                             # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
                                                             accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
@@ -269,10 +270,10 @@ class mnasnet_embedder(pl.LightningModule):
         if batch_idx == 0:
             # only perfom testing once per validation epoch
             all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
-                             epoch=self.current_epoch,
-                             trunk_model=self,
-                             embedder_model=None,
-                             )
+                                        epoch=self.current_epoch,
+                                        trunk_model=self,
+                                        embedder_model=None,
+                                        )
             for k,v in all_accs["val"].items():
                 
                 # self.log("val_acc", all_accs["val"]["precision_at_1_level0"], sync_dist=True)
@@ -315,12 +316,13 @@ class mnasnet_embedder(pl.LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument("--train", type=str, default="project/train.csv", help="path to the train.csv file")
         parser.add_argument("--valid", type=str, default="project/valid.csv", help="path to the valid.csv file")
-        parser.add_argument("--embed_sz", type=int, default=128, help="embedding size")
-        parser.add_argument("--batch_size", type=int, default=128, help="batch size for dataloader")
-        parser.add_argument("--lr", type=float, default=0.0001, help="learning rate for the optimizer")
-        parser.add_argument("--image_size", type=int, default=64, help="resolution at which to feed images to model")
-        parser.add_argument("--min_lr", type=float, default=1e-8, help="minimum lr which the optimizer should retain")
-        parser.add_argument("--t_max", type=int, default=50, help="at which epoch `time-period / 2 value` should happen")
+        parser.add_argument("--embed_sz", type=int, default=256, help="embedding size")
+        parser.add_argument("--batch_size", type=int, default=200, help="batch size for dataloader")
+        parser.add_argument("--lr_trunk", type=float, default=0.00001, help="learning rate for the trunk optimizer")
+        parser.add_argument("--lr_embedder", type=float, default=0.0001, help="learning rate for the embedder optimizer")
+        parser.add_argument("--lr_arcface", type=float, default=0.0001, help="learning rate for the arcface optimizer")
+        parser.add_argument("--image_size", type=int, default=224, help="resolution at which to feed images to model")
+        parser.add_argument("--warmup_epochs", type=int, default=2, help="no. of epochs after which lr will reach specified value of lr , starting from 0")
         parser.add_argument("--samples_per_iter", type=int, default=20, help="The number of samples per class to fetch at every iteration. \n SEE: https://kevinmusgrave.github.io/pytorch-metric-learning/samplers/#mperclasssampler")
         
         return parser
@@ -328,7 +330,7 @@ class mnasnet_embedder(pl.LightningModule):
 
 def cli_main(args=None):
    
-    wandb.init() # needed for wandb.watch
+    run = wandb.init() # needed for wandb.watch
     wandb.login()
 
     pl.seed_everything(1234)
@@ -336,13 +338,24 @@ def cli_main(args=None):
     parser = ArgumentParser()
     
     parser = pl.Trainer.add_argparse_args(parser)
-    parser = mnist_embedder.add_model_specific_args(parser)
+    parser = mnasnet_embedder.add_model_specific_args(parser)
     args = parser.parse_args(args)
+    
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #                      dataset artifact
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    model = mnist_embedder(**vars(args))
-    # model.prepare_data()
-    # model.setup()
-    # print(len(model.train_dataset))
+    # my_data = wandb.Artifact("cifar-10", type="training-datasets")
+    # my_data.add_dir("./dataset")
+    # run.log_artifact(my_data)
+
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    #                      code artifact
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
+    
+    model = mnasnet_embedder(**vars(args))
+   
 
     wandb_logger = WandbLogger(project='Arcface-FaceRecognition-glint', 
                            config=vars(args),
@@ -350,11 +363,25 @@ def cli_main(args=None):
                            job_type='train')
     wandb.watch(
             model, criterion=None, log="all",
-            log_graph=True, log_freq=20
-        )
-    trainer = pl.Trainer.from_argparse_args(args, logger=wandb_logger, callbacks=[pl.callbacks.LearningRateMonitor()], weights_summary='top', progress_bar_refresh_rate=20)
+            log_graph=True, log_freq=50
+        ) # set freq. to see gradients
+    
+    
+    # ==========================================================================
+    #                             callbacks                                  
+    # ==========================================================================
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(filename="checkpoints/mnasnet_arcface-{epoch:02d}-{precision_at_1_level0:.6f}", 
+                                                        monitor='precision_at_1_level0',
+                                                        mode='max')
+    
+    lr_callback = pl.callbacks.LearningRateMonitor(logging_interval="step")
+    
+    trainer = pl.Trainer.from_argparse_args(args, 
+                                            logger=wandb_logger, 
+                                            callbacks=[checkpoint_callback, lr_callback], 
+                                            weights_summary='top', 
+                                            progress_bar_refresh_rate=20)
     trainer.fit(model)
-    # return dm, model, trainer
 
     wandb.finish()
     
