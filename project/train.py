@@ -137,7 +137,7 @@ class mnasnet_embedder(pl.LightningModule):
                                                             end_of_testing_hook=self.hooks.end_of_testing_hook,
                                                             visualizer=umap.UMAP(),
                                                             visualizer_hook=self.visualizer_hook,
-                                                            dataloader_num_workers=4,
+                                                            dataloader_num_workers=12,
                                                             batch_size=self.batch_size,
                                                             # data_device=self.device,
                                                             # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
@@ -238,12 +238,12 @@ class mnasnet_embedder(pl.LightningModule):
         
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=6, pin_memory=True, prefetch_factor=24, persistent_workers=True, sampler=self.sampler)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=12, pin_memory=True, prefetch_factor=24, persistent_workers=True, sampler=self.sampler)
         # return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=12)
 
     def val_dataloader(self):
         # return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=4)
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=6)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=12)
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #                pl-lightning realted functions
