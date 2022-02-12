@@ -73,7 +73,7 @@ class mnasnet_embedder(pl.LightningModule):
         self.warmup_epochs = warmup_epochs
         self.train_transform = transforms.Compose(
                                                         [
-                                                            # transforms.Resize(size=self.image_size),
+                                                            transforms.Resize(size=(self.image_size, self.image_size)),
                                                             transforms.ToTensor(),
                                                             transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
@@ -82,7 +82,7 @@ class mnasnet_embedder(pl.LightningModule):
         
         self.val_transform = transforms.Compose(
                                                         [
-                                                            # transforms.Resize(size=self.image_size),
+                                                            transforms.Resize(size=(self.image_size, self.image_size)),
                                                             transforms.ToTensor(),
                                                             transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
                                                         ]
@@ -138,7 +138,7 @@ class mnasnet_embedder(pl.LightningModule):
                                                             visualizer=umap.UMAP(),
                                                             visualizer_hook=self.visualizer_hook,
                                                             dataloader_num_workers=2,
-                                                            batch_size=self.batch_size,
+                                                            batch_size=32,
                                                             # data_device=self.device,
                                                             # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
                                                             accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
@@ -238,12 +238,12 @@ class mnasnet_embedder(pl.LightningModule):
         
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=6, pin_memory=True, prefetch_factor=24, persistent_workers=True, sampler=self.sampler)
-        # return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=12)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, pin_memory=True, sampler=self.sampler)
+        # return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, pin_memory=True)        
 
     def val_dataloader(self):
-        # return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=4)
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=6)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=4)
+        # return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=6, pin_memory=True, prefetch_factor=4, persistent_workers=True, sampler=self.sampler)
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #                pl-lightning realted functions
@@ -386,7 +386,19 @@ def cli_main(args=None):
     trainer.fit(model)
 
     wandb.finish()
-
+    # model.prepare_data()
+    # model.setup()
+    # for k,v in model.train_dataloader():
+    #     Console().print(k.shape)
+    #     Console().print(v.shape)
+    #     out = model.forward(k)
+    #     Console().print(f"embedding ---> {out.shape}")
+    #     # get the hard examples        
+    #     miner_output = model.miner(out, v) # in your training for-loop
+    #     loss = model.arcface_loss_layer(out, v, miner_output)
+    #     Console().print(f"loss ---> {loss}")
+    #     break
+    
 
 if __name__ == "__main__":
     # dm, model, trainer = cli_main()

@@ -17,7 +17,7 @@ class identities_ds(Dataset):
         transform : [type], 
             transformations to apply on the each image, must be of torchvision type
         '''        
-        self.csv = pd.read_csv(csv, skipinitialspace=True)
+        self.csv = pd.read_csv(csv, skipinitialspace=True, skip_blank_lines=True)
         # bad practice to load into memory wholly but this info. is needed outside the class (by arcface loss classification layer) 
         self.targets = self.csv.iloc[:,-1].values
         self.trf = transform
