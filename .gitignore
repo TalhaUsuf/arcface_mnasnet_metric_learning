@@ -131,3 +131,6 @@ MNIST
 tmp
 arcface_mnasnet
 wandb
+example_tensorboard
+example_logs
+arcface_mnasnet_metric_learning-project

@@ -46,8 +46,8 @@ logging.info("VERSION %s" % pytorch_metric_learning.__version__)
 
 class mnasnet_embedder(pl.LightningModule):
     def __init__(self, 
-                train : str = "project/train.csv", 
-                valid : str = "project/valid.csv", 
+                train_ds : str = "project/train.csv", 
+                valid_ds : str = "project/valid.csv", 
                 embed_sz : int = 256, 
                 batch_size : int = 200, 
                 image_size : int = 224,
@@ -63,8 +63,8 @@ class mnasnet_embedder(pl.LightningModule):
         self.save_hyperparameters()
         self.image_size = image_size
         self.embed_sz = embed_sz
-        self.train = train
-        self.valid = valid
+        self.train_ds = train_ds
+        self.valid_ds = valid_ds
         self.batch_size = batch_size
         self.samples_per_iter = samples_per_iter
         self.lr_trunk = lr_trunk
@@ -217,9 +217,9 @@ class mnasnet_embedder(pl.LightningModule):
         #           Making the dis-joint datasets
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # Class disjoint training and validation set
-        self.train_dataset = identities_ds(self.train, self.train_transform)
+        self.train_dataset = identities_ds(self.train_ds, self.train_transform)
                                                     
-        self.val_dataset = identities_ds(self.valid, self.val_transform)
+        self.val_dataset = identities_ds(self.valid_ds, self.val_transform)
         
         # needed by embedding-tester                                                        
         self.dataset_dict = {"val": self.val_dataset}
@@ -257,7 +257,7 @@ class mnasnet_embedder(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         # generate the embedding
         images, labels = batch
-        embedding = self(images) # everything in forward  will be executed
+        embedding = self.forward(images) # everything in forward  will be executed
 
         # get the hard examples        
         miner_output = self.miner(embedding, labels) # in your training for-loop
@@ -268,6 +268,7 @@ class mnasnet_embedder(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         # below line is necessary or it will perform testing on each mini-batch of the validation set
+        
         if batch_idx == 0:
             # only perfom testing once per validation epoch
             all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
@@ -315,8 +316,8 @@ class mnasnet_embedder(pl.LightningModule):
 
 
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--train", type=str, default="project/train.csv", help="path to the train.csv file")
-        parser.add_argument("--valid", type=str, default="project/valid.csv", help="path to the valid.csv file")
+        parser.add_argument("--train_ds", type=str, default="project/train.csv", help="path to the train.csv file")
+        parser.add_argument("--valid_ds", type=str, default="project/valid.csv", help="path to the valid.csv file")
         parser.add_argument("--embed_sz", type=int, default=256, help="embedding size")
         parser.add_argument("--batch_size", type=int, default=200, help="batch size for dataloader")
         parser.add_argument("--lr_trunk", type=float, default=0.00001, help="learning rate for the trunk optimizer")
