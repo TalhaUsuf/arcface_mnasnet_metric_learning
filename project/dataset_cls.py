@@ -3,6 +3,7 @@ from rich.console import Console
 import torch
 import pandas as pd
 import cv2
+from PIL import Image
 
 class identities_ds(Dataset):
     def __init__(self, csv:str, transform = None):
@@ -35,9 +36,8 @@ class identities_ds(Dataset):
         
     def __getitem__(self,idx):
         
-        img = cv2.imread(self.csv.iloc[idx,0])
+        img = Image.open(self.csv.iloc[idx,0]).convert('RGB')
         if img is not None:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             target = self.csv.iloc[idx,-1] # label       
             if self.trf:
                 img = self.trf(img) # [C, H, W]

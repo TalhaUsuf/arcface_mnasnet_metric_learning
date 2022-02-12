@@ -224,6 +224,7 @@ class mnasnet_embedder(pl.LightningModule):
         # needed by embedding-tester                                                        
         self.dataset_dict = {"val": self.val_dataset}
         self.classes_in_training = np.unique(self.train_dataset.targets)
+        Console().print(f"classes in training ---> {len(self.classes_in_training)}")
 
         assert set(self.train_dataset.targets).isdisjoint(set(self.val_dataset.targets)), "labels are NOT dis-joint"
 
@@ -272,7 +273,7 @@ class mnasnet_embedder(pl.LightningModule):
             all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
                                         epoch=self.current_epoch,
                                         trunk_model=self,
-                                        embedder_model=None,
+                                        embedder_model=None, # will be replaced by identity internally
                                         )
             for k,v in all_accs["val"].items():
                 
@@ -384,110 +385,10 @@ def cli_main(args=None):
     trainer.fit(model)
 
     wandb.finish()
-    
+
 
 if __name__ == "__main__":
     # dm, model, trainer = cli_main()
     cli_main()
 
-
-
-
-# # Set the loss function
-# loss = losses.TripletMarginLoss(margin=0.1)
-
-# # Set the mining function
-# miner = miners.MultiSimilarityMiner(epsilon=0.1)
-
-# # Set the dataloader sampler
-# sampler = samplers.MPerClassSampler(
-#     train_dataset.targets, m=4, length_before_new_iter=len(train_dataset)
-# )
-
-# # Set other training parameters
-# batch_size = 32
-# num_epochs = 4
-
-# # Package the above stuff into dictionaries.
-# models = {"trunk": trunk, "embedder": embedder} # trunk ---> resnet , embedder ---> MLP model
-
-# # making separate optimizers
-
-# optimizers = {
-#     "trunk_optimizer": trunk_optimizer,
-#     "embedder_optimizer": embedder_optimizer,
-# }
-# loss_funcs = {"metric_loss": loss}
-# mining_funcs = {"tuple_miner": miner}
-
-# # Remove logs if you want to train with new parameters
-# !rm -rf example_logs/ example_saved_models/ example_tensorboard/
-
-# """## Create the training and testing hooks"""
-
-# record_keeper, _, _ = logging_presets.get_record_keeper(
-#     "example_logs", "example_tensorboard"
-# )
-# hooks = logging_presets.get_hook_container(record_keeper)
-# dataset_dict = {"val": val_dataset}
-# model_folder = "example_saved_models"
-
-
-# def visualizer_hook(umapper, umap_embeddings, labels, split_name, keyname, *args):
-#     logging.info(
-#         "UMAP plot for the {} split and label set {}".format(split_name, keyname)
-#     )
-#     label_set = np.unique(labels)
-#     num_classes = len(label_set)
-#     fig = plt.figure(figsize=(20, 15))
-#     plt.gca().set_prop_cycle(
-#         cycler(
-#             "color", [plt.cm.nipy_spectral(i) for i in np.linspace(0, 0.9, num_classes)]
-#         )
-#     )
-#     for i in range(num_classes):
-#         idx = labels == label_set[i]
-#         plt.plot(umap_embeddings[idx, 0], umap_embeddings[idx, 1], ".", markersize=1)
-#     plt.show()
-
-
-# # Create the tester
-# tester = testers.GlobalEmbeddingSpaceTester(
-#     end_of_testing_hook=hooks.end_of_testing_hook,
-#     visualizer=umap.UMAP(),
-#     visualizer_hook=visualizer_hook,
-#     dataloader_num_workers=2,
-#     accuracy_calculator=AccuracyCalculator(k="max_bin_count"),
-# )
-
-# end_of_epoch_hook = hooks.end_of_epoch_hook(
-#     tester, dataset_dict, model_folder, test_interval=1, patience=1
-# )
-
-# """## Create the trainer"""
-
-# trainer = trainers.MetricLossOnly(
-#     models,
-#     optimizers,
-#     batch_size,
-#     loss_funcs,
-#     mining_funcs,
-#     train_dataset,
-#     sampler=sampler,
-#     dataloader_num_workers=2,
-#     end_of_iteration_hook=hooks.end_of_iteration_hook,
-#     end_of_epoch_hook=end_of_epoch_hook,
-# )
-
-# """## Start Tensorboard
-# (Turn off adblock and other shields)
-# """
-
-# # Commented out IPython magic to ensure Python compatibility.
-# # %load_ext tensorboard
-# # %tensorboard --logdir example_tensorboard
-
-# """## Train the model"""
-
-# trainer.train(num_epochs=num_epochs)
 
