@@ -90,6 +90,24 @@ trainer.test(test_dataloaders=test)
 
 # Pre-processing
 
+
+## Make a csv file efficiently 💡
+
+
+```bash
+python preprocess/make_txt_files.py --d  /home/talha/metric_learning/glint360k_unpacked --c dataset.csv
+```
+
+
+## Split efficiently
+
+
+```bash
+python preprocess/split.py --split_valid  --csv dataset.csv
+```
+
+
+
 ## Dataset Dir.  📃
 
 |Dataset|Dir. |

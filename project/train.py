@@ -56,6 +56,8 @@ class mnasnet_embedder(pl.LightningModule):
                 lr_embedder : float = 0.0001, 
                 lr_arcface : float = 0.0001,
                 warmup_epochs : int = 2,
+                T_0 : float = 1,
+                T_mult : float = 2,
                 **kwargs):
 
         super(mnasnet_embedder, self).__init__()
@@ -65,6 +67,8 @@ class mnasnet_embedder(pl.LightningModule):
         self.embed_sz = embed_sz
         self.train_ds = train_ds
         self.valid_ds = valid_ds
+        self.T_0 = T_0
+        self.T_mult = T_mult
         self.batch_size = batch_size
         self.samples_per_iter = samples_per_iter
         self.lr_trunk = lr_trunk
@@ -134,15 +138,26 @@ class mnasnet_embedder(pl.LightningModule):
         self.miner = miners.MultiSimilarityMiner(epsilon=0.1)
        
         self.tester = testers.GlobalEmbeddingSpaceTester(
-                                                            end_of_testing_hook=self.hooks.end_of_testing_hook,
-                                                            visualizer=umap.UMAP(),
-                                                            visualizer_hook=self.visualizer_hook,
+                                                            end_of_testing_hook=None,
+                                                            visualizer=None,
+                                                            visualizer_hook=None,
                                                             dataloader_num_workers=2,
-                                                            batch_size=32,
+                                                            batch_size=200,
                                                             # data_device=self.device,
-                                                            # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
-                                                            accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
+                                                            accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
+                                                            # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
                                                         )
+       
+        # self.tester = testers.GlobalEmbeddingSpaceTester(
+        #                                                     end_of_testing_hook=self.hooks.end_of_testing_hook,
+        #                                                     visualizer=umap.UMAP(),
+        #                                                     visualizer_hook=self.visualizer_hook,
+        #                                                     dataloader_num_workers=2,
+        #                                                     batch_size=32,
+        #                                                     # data_device=self.device,
+        #                                                     # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
+        #                                                     accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
+        #                                                 )
     
     def visualizer_hook(self, umapper, umap_embeddings, labels, split_name, keyname, *args):
         logging.info(
@@ -242,7 +257,7 @@ class mnasnet_embedder(pl.LightningModule):
         # return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, pin_memory=True)        
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=2)
         # return DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=6, pin_memory=True, prefetch_factor=4, persistent_workers=True, sampler=self.sampler)
 
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -287,17 +302,22 @@ class mnasnet_embedder(pl.LightningModule):
         
     def configure_optimizers(self):
         
-        optimizer_trunk = torch.optim.Adam(self.trunk.parameters(), lr=self.lr_trunk)
-        lr_scheduler_trunk = LinearWarmupCosineAnnealingLR(optimizer_trunk, self.warmup_epochs, self.trainer.max_epochs,
-                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
+        optimizer_trunk = torch.optim.Adam(self.trunk.parameters(), lr=self.hparams.lr_trunk)
+        # lr_scheduler_trunk = LinearWarmupCosineAnnealingLR(optimizer_trunk, self.warmup_epochs, self.trainer.max_epochs,
+        #                                              warmup_start_lr=0, eta_min=0.0, last_epoch=-1)
+        lr_scheduler_trunk = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer_trunk, T_0=self.hparams.T_0, T_mult=self.hparams.T_mult, eta_min=0.0, last_epoch=-1)
         
-        optimizer_embedder = torch.optim.Adam(self.embedder.parameters(), lr=self.lr_embedder)
-        lr_scheduler_embedder = LinearWarmupCosineAnnealingLR(optimizer_embedder, self.warmup_epochs, self.trainer.max_epochs,
-                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
+        optimizer_embedder = torch.optim.Adam(self.embedder.parameters(), lr=self.hparams.lr_embedder)
+        # lr_scheduler_embedder = LinearWarmupCosineAnnealingLR(optimizer_embedder, self.warmup_epochs, self.trainer.max_epochs,
+        #                                              warmup_start_lr=0, eta_min=0.0, last_epoch=-1)
         
-        optimizer_arcface_clf = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr_arcface)
-        lr_scheduler_arcface = LinearWarmupCosineAnnealingLR(optimizer_arcface_clf, self.warmup_epochs, self.trainer.max_epochs,
-                                                     warmup_start_lr=0.0, eta_min=0.0, last_epoch=- 1)
+        lr_scheduler_embedder = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer_embedder, T_0=self.hparams.T_0, T_mult=self.hparams.T_mult, eta_min=0.0, last_epoch=-1)
+        
+        optimizer_arcface_clf = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.hparams.lr_arcface)
+        # lr_scheduler_arcface = LinearWarmupCosineAnnealingLR(optimizer_arcface_clf, self.warmup_epochs, self.trainer.max_epochs,
+        #                                              warmup_start_lr=0, eta_min=0.0, last_epoch=-1)
+        
+        lr_scheduler_arcface = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer_arcface_clf, T_0=self.hparams.T_0, T_mult=self.hparams.T_mult, eta_min=0.0, last_epoch=-1)
         
 
         # self.optimizer_arcface = torch.optim.Adam(self.arcface_loss_layer.parameters(), lr=self.lr)
@@ -305,9 +325,11 @@ class mnasnet_embedder(pl.LightningModule):
         
         return [optimizer_trunk, 
                 optimizer_embedder, 
-                optimizer_arcface_clf], [ {"scheduler":lr_scheduler_trunk, "name":"trunk_lr"},
-                                         {"scheduler":lr_scheduler_embedder, "name":"embedder_lr"}, 
-                                         {"scheduler" : lr_scheduler_arcface, "name" : "arcface_lr"} ]
+                optimizer_arcface_clf], [ 
+                                         {"scheduler":lr_scheduler_trunk, "name":"trunk_lr", "interval": "step"},
+                                         {"scheduler":lr_scheduler_embedder, "name":"embedder_lr", "interval": "step"}, 
+                                         {"scheduler" : lr_scheduler_arcface, "name" : "arcface_lr", "interval": "step"} 
+                                         ]
 
 
 
@@ -326,7 +348,8 @@ class mnasnet_embedder(pl.LightningModule):
         parser.add_argument("--image_size", type=int, default=224, help="resolution at which to feed images to model")
         parser.add_argument("--warmup_epochs", type=int, default=2, help="no. of epochs after which lr will reach specified value of lr , starting from 0")
         parser.add_argument("--samples_per_iter", type=int, default=20, help="The number of samples per class to fetch at every iteration. \n SEE: https://kevinmusgrave.github.io/pytorch-metric-learning/samplers/#mperclasssampler")
-        
+        parser.add_argument("--T_0", type=int, default=1, help="no. of iterations for ist restart")
+        parser.add_argument("--T_mult", type=int, default=2, help="factor increasing the T_0 after each restart")
         return parser
 
 
@@ -355,6 +378,7 @@ def cli_main(args=None):
     #                      code artifact
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
+    # wandb.run.log_code(".")  # all python files in current dir. are uploaded
     
     model = mnasnet_embedder(**vars(args))
    
@@ -372,9 +396,15 @@ def cli_main(args=None):
     # ==========================================================================
     #                             callbacks                                  
     # ==========================================================================
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(filename="checkpoints/mnasnet_arcface-{epoch:02d}-{precision_at_1_level0:.6f}", 
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+                                                        filename="checkpoints/mnasnet_arcface-{epoch:02d}-{precision_at_1_level0:.6f}", 
                                                         monitor='precision_at_1_level0',
-                                                        mode='max')
+                                                        # dirpath='ckpts/',
+                                                        mode='max',
+                                                        save_last=True, 
+                                                        save_weights_only=False, 
+                                                        every_n_train_steps=500
+                                                        )
     
     lr_callback = pl.callbacks.LearningRateMonitor(logging_interval="step")
     
