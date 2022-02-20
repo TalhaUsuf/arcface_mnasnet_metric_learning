@@ -142,7 +142,7 @@ class mnasnet_embedder(pl.LightningModule):
                                                             visualizer=None,
                                                             visualizer_hook=None,
                                                             dataloader_num_workers=2,
-                                                            batch_size=200,
+                                                            batch_size=32,
                                                             # data_device=self.device,
                                                             accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count", device=self.device),
                                                             # accuracy_calculator=AccuracyCalculator(avg_of_avgs=True, k="max_bin_count"),
@@ -239,7 +239,7 @@ class mnasnet_embedder(pl.LightningModule):
         # needed by embedding-tester                                                        
         self.dataset_dict = {"val": self.val_dataset}
         self.classes_in_training = np.unique(self.train_dataset.targets)
-        Console().print(f"classes in training ---> {len(self.classes_in_training)}")
+        Console().print(f"classes in training ---> {len(self.classes_in_training) + 1}")
 
         assert set(self.train_dataset.targets).isdisjoint(set(self.val_dataset.targets)), "labels are NOT dis-joint"
 
@@ -249,11 +249,11 @@ class mnasnet_embedder(pl.LightningModule):
                                                 )
         # loss function layer needs the no. of classes
         # see : https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/TrainWithClassifier.ipynb
-        self.arcface_loss_layer = losses.ArcFaceLoss(len(self.classes_in_training), self.embed_sz, margin=28.6, scale=64)
+        self.arcface_loss_layer = losses.ArcFaceLoss(len(self.classes_in_training) + 1, self.embed_sz, margin=28.6, scale=64)
         
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, pin_memory=True, sampler=self.sampler)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=2, pin_memory=True, sampler=self.sampler)
         # return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, pin_memory=True)        
 
     def val_dataloader(self):
@@ -355,7 +355,7 @@ class mnasnet_embedder(pl.LightningModule):
 
 def cli_main(args=None):
    
-    run = wandb.init() # needed for wandb.watch
+    run = wandb.init(id='2i4p43ar', resume="must") # needed for wandb.watch
     wandb.login()
 
     pl.seed_everything(1234)
