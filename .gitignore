@@ -134,3 +134,5 @@ wandb
 example_tensorboard
 example_logs
 arcface_mnasnet_metric_learning-project
+*.ckpt
+weights

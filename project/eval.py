@@ -32,8 +32,8 @@ from pytorch_metric_learning import losses
 import seaborn as sns
 import pandas as pd
 from argparse import ArgumentParser
-import wandb
-from pytorch_lightning.loggers import WandbLogger
+# import wandb
+# from pytorch_lightning.loggers import WandbLogger
 
 
 
@@ -177,9 +177,9 @@ class mnasnet_embedder(pl.LightningModule):
         plt.title(f"epoch_{self.current_epoch}")
         # plt.savefig(f"embeddings_{nm}_epoch_{self.current_epoch}.jpg")
         # wandb.log({f"embeddings" : wandb.Image("embeddings_{nm}_epoch_{self.current_epoch}.jpg")})
-        wandb.log({"embeddings" : plt,
-                   "captions" : wandb.Html(f"<h1>epoch_{self.current_epoch}</h1>"),
-                   "epoch" : self.current_epoch,})
+        # wandb.log({"embeddings" : plt,
+        #            "captions" : wandb.Html(f"<h1>epoch_{self.current_epoch}</h1>"),
+        #            "epoch" : self.current_epoch,})
         plt.close(fig)
   
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -249,7 +249,8 @@ class mnasnet_embedder(pl.LightningModule):
                                                 )
         # loss function layer needs the no. of classes
         # see : https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/TrainWithClassifier.ipynb
-        self.arcface_loss_layer = losses.ArcFaceLoss(len(self.classes_in_training) + 1, self.embed_sz, margin=28.6, scale=64)
+        # self.arcface_loss_layer = losses.ArcFaceLoss(len(self.classes_in_training) + 1, self.embed_sz, margin=28.6, scale=64)
+        self.arcface_loss_layer = losses.ArcFaceLoss(163552, self.embed_sz, margin=28.6, scale=64)
         
 
     def train_dataloader(self):
@@ -269,39 +270,36 @@ class mnasnet_embedder(pl.LightningModule):
         x = self.embedder(x) # MLP get the embedding using features as input
         return x
     
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        # generate the embedding
-        images, labels = batch
-        embedding = self.forward(images) # everything in forward  will be executed
+    # def training_step(self, batch, batch_idx, optimizer_idx):
+    #     # generate the embedding
+    #     images, labels = batch
+    #     embedding = self.forward(images) # everything in forward  will be executed
 
-        # get the hard examples        
-        miner_output = self.miner(embedding, labels) # in your training for-loop
-        loss = self.arcface_loss_layer(embedding, labels, miner_output)
-        # loss = self.arcface_loss_layer(embedding, labels)
-        self.log("train_loss", loss, sync_dist=True)
-        
-        
-        
-        return {"loss" : loss}
+    #     # get the hard examples        
+    #     miner_output = self.miner(embedding, labels) # in your training for-loop
+    #     loss = self.arcface_loss_layer(embedding, labels, miner_output)
+    #     # loss = self.arcface_loss_layer(embedding, labels)
+    #     self.log("train_loss", loss, sync_dist=True)
+    #     return {"loss" : loss}
     
-    def validation_step(self, batch, batch_idx, dataloader_idx=None):
-        # below line is necessary or it will perform testing on each mini-batch of the validation set
+    # def validation_step(self, batch, batch_idx, dataloader_idx=None):
+    #     # below line is necessary or it will perform testing on each mini-batch of the validation set
         
-        if batch_idx == 0:
-            # only perfom testing once per validation epoch
-            all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
-                                        epoch=self.current_epoch,
-                                        trunk_model=self,
-                                        embedder_model=None, # will be replaced by identity internally
-                                        )
-            for k,v in all_accs["val"].items():
+    #     if batch_idx == 0:
+    #         # only perfom testing once per validation epoch
+    #         all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
+    #                                     epoch=self.current_epoch,
+    #                                     trunk_model=self,
+    #                                     embedder_model=None, # will be replaced by identity internally
+    #                                     )
+    #         for k,v in all_accs["val"].items():
                 
-                # self.log("val_acc", all_accs["val"]["precision_at_1_level0"], sync_dist=True)
-                self.log(f"{k}", all_accs["val"][f"{k}"], sync_dist=True)
+    #             # self.log("val_acc", all_accs["val"]["precision_at_1_level0"], sync_dist=True)
+    #             self.log(f"{k}", all_accs["val"][f"{k}"], sync_dist=True)
             
-            return {"val_acc": all_accs["val"]["precision_at_1_level0"]}
-        else:
-            pass
+    #         return {"val_acc": all_accs["val"]["precision_at_1_level0"]}
+    #     else:
+    #         pass
         
     def configure_optimizers(self):
         
@@ -333,7 +331,38 @@ class mnasnet_embedder(pl.LightningModule):
                                          {"scheduler":lr_scheduler_embedder, "name":"embedder_lr", "interval": "step"}, 
                                          {"scheduler" : lr_scheduler_arcface, "name" : "arcface_lr", "interval": "step"} 
                                          ]
+    # ==========================================================================
+    #                             for testing purpose                                  
+    # ==========================================================================
+    def get_all_embeddings(self, dataset, model, data_device):
+        # dataloader_num_workers has to be 0 to avoid pid error
+        # This only happens when within multiprocessing
+        tester = testers.BaseTester(dataloader_num_workers=4, data_device=data_device)
+        return tester.get_all_embeddings(dataset, model)
 
+    def test(self, train_set, test_set, model, accuracy_calculator, data_device):
+        train_embeddings, train_labels = self.get_all_embeddings(train_set, model, data_device)
+        test_embeddings, test_labels = self.get_all_embeddings(test_set, model, data_device)
+        Console().print(test_embeddings.shape)
+        train_labels = train_labels.squeeze(1)
+        test_labels = test_labels.squeeze(1)
+        accuracies = accuracy_calculator.get_accuracy(
+                                                        query=test_embeddings, 
+                                                        reference=train_embeddings, 
+                                                        query_labels=test_labels, 
+                                                        reference_labels=train_labels, 
+                                                        embeddings_come_from_same_source=True
+                                                    )
+        for k,v in accuracies.items():
+            Console().print(f"{k} : {v}", style="magenta on black")
+            
+
+    # THIS FUNCTION NEEDS TO BE CALLED TO TEST THE MODEL  
+    def test_model(self):
+        
+        
+        accuracy_calculator = AccuracyCalculator(avg_of_avgs=True, k='max_bin_count', device=self.device)
+        self.test(self.train_dataset, self.val_dataset, self, accuracy_calculator, self.device)
 
 
     @staticmethod
@@ -358,8 +387,8 @@ class mnasnet_embedder(pl.LightningModule):
 
 def cli_main(args=None):
    
-    run = wandb.init(id='2i4p43ar', resume="must") # needed for wandb.watch
-    wandb.login()
+    # run = wandb.init(id='2i4p43ar', resume="must") # needed for wandb.watch
+    # wandb.login()
 
     pl.seed_everything(1234)
 
@@ -380,20 +409,20 @@ def cli_main(args=None):
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #                      code artifact
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
+    # wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
     # wandb.run.log_code(".")  # all python files in current dir. are uploaded
     
     model = mnasnet_embedder(**vars(args))
    
 
-    wandb_logger = WandbLogger(project='Arcface-FaceRecognition-glint', 
-                           config=vars(args),
-                           group='face-recognition', 
-                           job_type='train')
-    wandb.watch(
-            model, criterion=None, log="all",
-            log_graph=True, log_freq=50
-        ) # set freq. to see gradients
+    # wandb_logger = WandbLogger(project='Arcface-FaceRecognition-glint', 
+    #                        config=vars(args),
+    #                        group='face-recognition', 
+    #                        job_type='train')
+    # wandb.watch(
+    #         model, criterion=None, log="all",
+    #         log_graph=True, log_freq=50
+    #     ) # set freq. to see gradients
     
     
     # ==========================================================================
@@ -408,19 +437,26 @@ def cli_main(args=None):
                                                         save_weights_only=False, 
                                                         every_n_train_steps=500
                                                         )
-    # change name of the last-ckpt to the specified name
-    checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-{step}-last"
     
     lr_callback = pl.callbacks.LearningRateMonitor(logging_interval="step")
     
-    trainer = pl.Trainer.from_argparse_args(args, 
-                                            logger=wandb_logger, 
-                                            callbacks=[checkpoint_callback, lr_callback], 
-                                            weights_summary='top', 
-                                            progress_bar_refresh_rate=20)
-    trainer.fit(model)
+    trainer = pl.Trainer.from_argparse_args(
+                                                args, 
+                                                # logger=wandb_logger, 
+                                                callbacks=[checkpoint_callback, lr_callback], 
+                                                weights_summary='top', 
+                                                progress_bar_refresh_rate=20
+                                            )
+    # trainer.fit(model)
+    model.prepare_data()
+    model.setup()
+    ckpts = torch.load('/home/talha/Downloads/arcface_mnasnet_metric_learning/arcface_mnasnet_metric_learning-project/2i4p43ar/checkpoints/last.ckpt')
+    # Console().print(ckpts.keys())
+    model.load_state_dict(ckpts['state_dict'])
+    model.to(torch.device("cuda:0"))
+    model.test_model()
 
-    wandb.finish()
+    # wandb.finish()
     # model.prepare_data()
     # model.setup()
     # for k,v in model.train_dataloader():
