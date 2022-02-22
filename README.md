@@ -106,7 +106,15 @@ python preprocess/make_txt_files.py --d  /home/talha/metric_learning/glint360k_u
 python preprocess/split.py --split_valid  --csv dataset.csv
 ```
 
+## sample 10 images per identity
 
+To make the test split fit into memory, 10 images per identity have been sampled
+
+```bash
+python preprocess/balance.py 
+```
+
+manually remove the header from the resultant csv file. `balanced.csv` file ⚖️ will be created. 
 
 ## Dataset Dir.  📃
 

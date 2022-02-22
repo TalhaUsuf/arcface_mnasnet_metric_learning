@@ -136,7 +136,7 @@ class mnasnet_embedder(pl.LightningModule):
                                                                 )
         self.hooks = logging_presets.get_hook_container(self.record_keeper)
         self.miner = miners.MultiSimilarityMiner(epsilon=0.1)
-       
+        
         self.tester = testers.GlobalEmbeddingSpaceTester(
                                                             end_of_testing_hook=None,
                                                             visualizer=None,
@@ -406,7 +406,8 @@ def cli_main(args=None):
                                                         mode='max',
                                                         save_last=True, 
                                                         save_weights_only=False, 
-                                                        every_n_train_steps=500
+                                                        every_n_train_steps=500,
+                                                        save_on_train_epoch_end=True
                                                         )
     # change name of the last-ckpt to the specified name
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-{step}-last"
