@@ -1,3 +1,12 @@
+"""
+Takes a csv file in which ist column has image paths and other column has unique integer ID associated with it. It then reduces the test.csv size
+by sampling only 10 images per identity and saves result into balanced.csv file. 
+
+For example: If 2nd column of given csv file has N unique integer idintities then it samples such that output file has approximately 10 images per identity 
+which is tentamount to 10 * N rows.
+"""
+
+
 from hashlib import new
 import numpy as np
 from rich.console import Console
