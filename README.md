@@ -236,8 +236,10 @@ python project/train.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_
 
 # Validation
 
-Use `eval.py` script 🗒️
+Use `eval_pairs.py` script 🗒️.
+
+🔥 **Checkpoint path** has been set inside the script  
 
 ```bash
-python project/eval.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_embedder 0.001 --lr_arcface 0.0001 --image_size 224 --gpus 2 --strategy ddp --log_every_n_steps 5 --warmup_epochs 3 --check_val_every_n_epoch 1 --precision 16 --amp_backend native --train_ds /home/talha/Downloads/arcface_mnasnet_metric_learning/train_cleaned.csv --valid_ds /home/talha/Downloads/arcface_mnasnet_metric_learning/val_cleaned.csv   --replace_sampler_ddp False --num_sanity_val_steps 0 --T_0 1 --T_mult 2 --resume_from_checkpoint '/home/talha/Downloads/arcface_mnasnet_metric_learning/arcface_mnasnet_metric_learning-project/2i4p43ar/checkpoints/last.ckpt'
+python project/eval_pairs.py 
 ```
