@@ -236,10 +236,28 @@ python project/train.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_
 
 # Validation
 
-Use `eval_pairs.py` script 🗒️.
+1. Following script will use the mxnet way to perform evaluation, it however is reporting the same accuracy on all three datasets (which is strange 💀)
 
-🔥 **Checkpoint path** has been set inside the script  
 
-```bash
-python project/eval_pairs.py 
-```
+    Use `eval_pairs.py` script 🗒️.
+
+    🔥 **Checkpoint path** has been set inside the script  
+
+    ```bash
+    python project/eval_pairs.py 
+    ```
+2. Following script will use user provided pairs to perform evaluation. It uses the [pairs.txt](pairs.txt) file to get pairs.
+
+    Pairs are needed in the following format (the trailing `1` or `0` tells if this is a positive pair ✔️  or a negative pair ✖️)
+    ```
+    Abel_Pacheco/Abel_Pacheco_0001.jpg Abel_Pacheco/Abel_Pacheco_0004.jpg 1
+    Akhmed_Zakayev/Akhmed_Zakayev_0001.jpg Akhmed_Zakayev/Akhmed_Zakayev_0003.jpg 1
+    Akhmed_Zakayev/Akhmed_Zakayev_0002.jpg Akhmed_Zakayev/Akhmed_Zakayev_0003.jpg 1
+    .
+    .
+    .
+    Abdel_Madi_Shabneh/Abdel_Madi_Shabneh_0001.jpg Mikhail_Gorbachev/Mikhail_Gorbachev_0001.jpg 0
+    Abdul_Rahman/Abdul_Rahman_0001.jpg Portia_de_Rossi/Portia_de_Rossi_0001.jpg 0
+    Abel_Pacheco/Abel_Pacheco_0001.jpg Jong_Thae_Hwa/Jong_Thae_Hwa_0002.jpg 0
+    Abel_Pacheco/Abel_Pacheco_0002.jpg Jean-Francois_Lemounier/Jean-Francois_Lemounier_0001.jpg 0
+    ```

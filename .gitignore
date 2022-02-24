@@ -138,3 +138,4 @@ arcface_mnasnet_metric_learning-project
 weights
 
 events.out.tfevents.*
+lfw_funneled
