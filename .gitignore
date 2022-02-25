@@ -139,3 +139,4 @@ weights
 
 events.out.tfevents.*
 lfw_funneled
+lfw

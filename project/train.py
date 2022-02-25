@@ -11,12 +11,14 @@ import record_keeper
 import torch
 import torch.nn as nn
 import torchvision
+import os
 import numpy as np
 from rich.console import Console
 import umap
 from uuid import uuid4
 from cycler import cycler
 from PIL import Image
+from eval_pairs import get_lfw_list, lfw_test
 from torchvision import datasets, transforms
 import umap
 import pytorch_metric_learning
@@ -58,11 +60,19 @@ class mnasnet_embedder(pl.LightningModule):
                 warmup_epochs : int = 2,
                 T_0 : float = 1,
                 T_mult : float = 2,
+                pairs_file : str = "pairs.txt",
+                lfw_dir : str = "lfw",
+                ver_batch : int = 32,
                 **kwargs):
 
         super(mnasnet_embedder, self).__init__()
 
+        # save hyper-params
         self.save_hyperparameters()
+        
+        self.ver_batch = ver_batch
+        self.lfw_dir = lfw_dir
+        self.pairs_file = pairs_file
         self.image_size = image_size
         self.embed_sz = embed_sz
         self.train_ds = train_ds
@@ -289,17 +299,38 @@ class mnasnet_embedder(pl.LightningModule):
         
         if batch_idx == 0:
             # only perfom testing once per validation epoch
-            all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
-                                        epoch=self.current_epoch,
-                                        trunk_model=self,
-                                        embedder_model=None, # will be replaced by identity internally
-                                        )
-            for k,v in all_accs["val"].items():
+            # all_accs = self.tester.test(dataset_dict=self.dataset_dict, 
+            #                             epoch=self.current_epoch,
+            #                             trunk_model=self,
+            #                             embedder_model=None, # will be replaced by identity internally
+            #                             )
+            # for k,v in all_accs["val"].items():
                 
-                # self.log("val_acc", all_accs["val"]["precision_at_1_level0"], sync_dist=True)
-                self.log(f"{k}", all_accs["val"][f"{k}"], sync_dist=True)
+            #     # self.log("val_acc", all_accs["val"]["precision_at_1_level0"], sync_dist=True)
+            #     self.log(f"{k}", all_accs["val"][f"{k}"], sync_dist=True)
             
-            return {"val_acc": all_accs["val"]["precision_at_1_level0"]}
+            # return {"val_acc": all_accs["val"]["precision_at_1_level0"]}
+        
+
+            identity_list = get_lfw_list(self.hparams.pairs_file)
+            img_paths = [os.path.join(self.hparams.lfw_dir, each) for each in identity_list]
+
+            # model.eval()
+            # model = mnasnet_embedder(train_ds = None, valid_ds = None, embed_sz = 256, batch_size = 250, image_size = 224)
+            # params = torch.load("/home/talha/Downloads/arcface_mnasnet_metric_learning/weights/last_1_epoch_last_step.ckpt")
+            # Console().log(f"following keys are present in the checkpoint ....")
+            # model.load_state_dict(params["state_dict"])
+            # model.eval()
+            # model.to(torch.device("cuda:1"))    
+            
+            acc = lfw_test(self, img_paths, identity_list, self.hparams.pairs_file, self.hparams.ver_batch, device=self.device)
+            Console().rule(title=f"Accuracy is {acc:3f}", style="green on black", characters="=")
+            
+            # this is not precision at 1 , it is named so because the checkpoint saved contains this key
+            self.log("precision_at_1_level0", acc, sync_dist=True)
+            
+            return {"precision_at_1_level0": acc}
+
         else:
             pass
         
@@ -353,6 +384,9 @@ class mnasnet_embedder(pl.LightningModule):
         parser.add_argument("--samples_per_iter", type=int, default=20, help="The number of samples per class to fetch at every iteration. \n SEE: https://kevinmusgrave.github.io/pytorch-metric-learning/samplers/#mperclasssampler")
         parser.add_argument("--T_0", type=int, default=1, help="no. of iterations for ist restart")
         parser.add_argument("--T_mult", type=int, default=2, help="factor increasing the T_0 after each restart")
+        parser.add_argument("--pairs_file", type=str, default="pairs.txt", help="path to the `pairs.txt` file")
+        parser.add_argument("--lfw_dir", type=str, default="lfw", help="path to the `lfw` dataset dir. [for evaluation]")
+        parser.add_argument("--ver_batch", type=int, default=32, help="batch size for verification of LFW dataset")
         return parser
 
 

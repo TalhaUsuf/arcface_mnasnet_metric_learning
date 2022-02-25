@@ -239,12 +239,12 @@ python project/train.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_
 1. Following script will use the mxnet way to perform evaluation, it however is reporting the same accuracy on all three datasets (which is strange 💀)
 
 
-    Use `eval_pairs.py` script 🗒️.
+    Use `project/eval_mxnet.py` script 🗒️.
 
     🔥 **Checkpoint path** has been set inside the script  
 
     ```bash
-    python project/eval_pairs.py 
+    python project/eval_mxnet.py 
     ```
 2. Following script will use user provided pairs to perform evaluation. It uses the [pairs.txt](pairs.txt) file to get pairs.
 
