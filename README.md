@@ -261,3 +261,84 @@ python project/train.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_
     Abel_Pacheco/Abel_Pacheco_0001.jpg Jong_Thae_Hwa/Jong_Thae_Hwa_0002.jpg 0
     Abel_Pacheco/Abel_Pacheco_0002.jpg Jean-Francois_Lemounier/Jean-Francois_Lemounier_0001.jpg 0
     ```
+
+
+# Conversion to onnx
+
+## Openvino docker[onnx ---> IR onnx representation]
+
+Convert to `onnx` using the default way of exporting *pytorch model to onnx*. It works ✔️ without error on current **conda environment**.
+
+### Install openvino docker image
+
+```bash
+ docker pull openvino/ubuntu18_dev
+```
+### Running the image
+
+`ONNX` file is located at : 
+
+```/home/talha/Downloads/arcface_mnasnet_metric_learning```
+
+Dir. structure inside `arcface_mnasnet_metric_learning` is shown below:
+
+```bash
+.
+├── arcface_mnasnet_metric_learning-project
+├── balanced.csv
+├── data
+├── dataset.csv
+├── events.out.tfevents.1645796091.Talha-System-PC.14468.0
+├── example_logs
+├── example_tensorboard
+├── IR_model
+├── lfw
+├── lfw_funneled
+├── LICENSE
+├── mnasnet_embedder.onnx
+├── pairs.txt
+├── preprocess
+├── project
+├── README.md
+├── requirements.txt
+├── setup.cfg
+├── setup.py
+├── tests
+├── tmp
+├── train.csv
+├── valid.csv
+├── wandb
+└── weights
+
+```
+
+
+> ⚠️❗ Absolute path must be given to mount this dir. volume inside docker
+
+
+```bash
+docker run -it --device /dev/dri:/dev/dri \ 
+            --device-cgroup-rule='c 189:* rmw' \
+            -v /home/talha/Downloads/arcface_mnasnet_metric_learning:/dev/bus/usb \
+            --rm openvino/ubuntu18_dev:latest
+```
+
+Now the contents inside dir. `arcface_mnasnet_metric_learning` are shown in `/dev/bus/usb`
+
+### Convert onnx to IR ⚙️
+
+Now the path to model is given as `/dev/bus/usb`/`*.onnx` because the dir. has been mounted inside docker image
+
+
+Model IR reporesentation will be saved in `IR_model` which was present in ```/home/talha/Downloads/arcface_mnasnet_metric_learning```.
+
+
+```bash
+python3 deployment_tools/model_optimizer/mo.py  \
+          --input_model /dev/bus/usb/mnasnet_embedder.onnx \
+          --model_name mnasnet_arcfrace_224_rgb_3_channel_fp32 \
+          --output_dir /dev/bus/usb/IR_model/  \
+          --input "input[1 3 224 224]"
+```
+
+Now IR files are located at ```/home/talha/Downloads/arcface_mnasnet_metric_learning/IR_model``` 😄
