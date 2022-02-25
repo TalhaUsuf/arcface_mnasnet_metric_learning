@@ -174,141 +174,143 @@ def lfw_test(model, img_paths, identity_list, compair_list, batch_size, device):
 
 
 
-# class mnasnet_embedder(pl.LightningModule):
-#     def __init__(self, 
-#                     train_ds : str = "project/train.csv", 
-#                     valid_ds : str = "project/valid.csv", 
-#                     embed_sz : int = 256, 
-#                     batch_size : int = 200, 
-#                     image_size : int = 224,
-#                     samples_per_iter : int = 20,
-#                     lr_trunk : float = 0.00001,
-#                     lr_embedder : float = 0.0001, 
-#                     lr_arcface : float = 0.0001,
-#                     warmup_epochs : int = 2,
-#                     T_0 : float = 1,
-#                     T_mult : float = 2,
-#                     **kwargs):
+class mnasnet_embedder(pl.LightningModule):
+    def __init__(self, 
+                    train_ds : str = "project/train.csv", 
+                    valid_ds : str = "project/valid.csv", 
+                    embed_sz : int = 256, 
+                    batch_size : int = 200, 
+                    image_size : int = 224,
+                    samples_per_iter : int = 20,
+                    lr_trunk : float = 0.00001,
+                    lr_embedder : float = 0.0001, 
+                    lr_arcface : float = 0.0001,
+                    warmup_epochs : int = 2,
+                    T_0 : float = 1,
+                    T_mult : float = 2,
+                    **kwargs):
 
-#             super(mnasnet_embedder, self).__init__()
+            super(mnasnet_embedder, self).__init__()
 
-#             self.save_hyperparameters()
-#             self.image_size = image_size
-#             self.embed_sz = embed_sz
-#             self.train_ds = train_ds
-#             self.valid_ds = valid_ds
-#             self.T_0 = T_0
-#             self.T_mult = T_mult
-#             self.batch_size = batch_size
-#             self.samples_per_iter = samples_per_iter
-#             self.lr_trunk = lr_trunk
-#             self.lr_embedder = lr_embedder
-#             self.lr_arcface = lr_arcface
-#             self.warmup_epochs = warmup_epochs
-#             self.train_transform = transforms.Compose(
-#                                                             [
-#                                                                 transforms.Resize(size=(self.image_size, self.image_size)),
-#                                                                 transforms.ToTensor(),
-#                                                                 transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
-#                                                             ]
-#                                                     )       
+            self.save_hyperparameters()
+            self.image_size = image_size
+            self.embed_sz = embed_sz
+            self.train_ds = train_ds
+            self.valid_ds = valid_ds
+            self.T_0 = T_0
+            self.T_mult = T_mult
+            self.batch_size = batch_size
+            self.samples_per_iter = samples_per_iter
+            self.lr_trunk = lr_trunk
+            self.lr_embedder = lr_embedder
+            self.lr_arcface = lr_arcface
+            self.warmup_epochs = warmup_epochs
+            self.train_transform = transforms.Compose(
+                                                            [
+                                                                transforms.Resize(size=(self.image_size, self.image_size)),
+                                                                transforms.ToTensor(),
+                                                                transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+                                                            ]
+                                                    )       
 
             
-#             self.val_transform = transforms.Compose(
-#                                                             [
-#                                                                 transforms.Resize(size=(self.image_size, self.image_size)),
-#                                                                 transforms.ToTensor(),
-#                                                                 transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
-#                                                             ]
-#                                                     )
+            self.val_transform = transforms.Compose(
+                                                            [
+                                                                transforms.Resize(size=(self.image_size, self.image_size)),
+                                                                transforms.ToTensor(),
+                                                                transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+                                                            ]
+                                                    )
             
             
             
-#             # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
-#             #            defining the [trunk ----> embedder] model
-#             #                       Trunk : Mnasnet                                                
-#             #                       Embedder : MLP
-#             #                       Classifier : ArcFace                                                 
-#             # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
+            # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
+            #            defining the [trunk ----> embedder] model
+            #                       Trunk : Mnasnet                                                
+            #                       Embedder : MLP
+            #                       Classifier : ArcFace                                                 
+            # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                                
             
-#             # ==========================================================================
-#             #                             trunk                                  
-#             # ==========================================================================
-#             self.trunk = timm.create_model('mnasnet_100', pretrained=True)
-#             # put backbone in train mode
-#             self.trunk.train()
+            # ==========================================================================
+            #                             trunk                                  
+            # ==========================================================================
+            self.trunk = timm.create_model('mnasnet_100', pretrained=True)
+            # put backbone in train mode
+            self.trunk.train()
             
-#             in_features = self.trunk.classifier.in_features
+            in_features = self.trunk.classifier.in_features
             
-#             # replace the classifier layer with identity layer
-#             self.trunk.classifier = nn.Identity()
-#             # make trunk wholly trainable        
-#             for p in self.trunk.parameters():
-#                 p.requires_grad = True
+            # replace the classifier layer with identity layer
+            self.trunk.classifier = nn.Identity()
+            # make trunk wholly trainable        
+            for p in self.trunk.parameters():
+                p.requires_grad = True
                 
-#             self.trunk_output_size = in_features
-#             # ==========================================================================
-#             #                             embedder                                  
-#             # ==========================================================================
-#             # define embedder
-#             self.embedder = self.get_embedder(self.trunk_output_size, self.embed_sz)
+            self.trunk_output_size = in_features
+            # ==========================================================================
+            #                             embedder                                  
+            # ==========================================================================
+            # define embedder
+            self.embedder = self.get_embedder(self.trunk_output_size, self.embed_sz)
             
-#             # ==========================================================================
-#             #                             classification head                                  
-#             # ==========================================================================
-#             self.arcface_loss_layer = losses.ArcFaceLoss(163552, self.embed_sz, margin=28.6, scale=64)
+            # ==========================================================================
+            #                             classification head                                  
+            # ==========================================================================
+            self.arcface_loss_layer = losses.ArcFaceLoss(163552, self.embed_sz, margin=28.6, scale=64)
 
-#     class MLP(nn.Module):
-#         # layer_sizes[0] is the dimension of the input
-#         # layer_sizes[-1] is the dimension of the output
-#         def __init__(self, layer_sizes, final_relu=False):
-#             super().__init__()
-#             layer_list = []
-#             layer_sizes = [int(x) for x in layer_sizes]
-#             num_layers = len(layer_sizes) - 1
-#             final_relu_layer = num_layers if final_relu else num_layers - 1
-#             for i in range(len(layer_sizes) - 1):
-#                 input_size = layer_sizes[i]
-#                 curr_size = layer_sizes[i + 1]
-#                 if i < final_relu_layer:
-#                     layer_list.append(nn.ReLU(inplace=False))
-#                 layer_list.append(nn.Linear(input_size, curr_size))
-#             self.net = nn.Sequential(*layer_list)
-#             self.last_linear = self.net[-1]
+    class MLP(nn.Module):
+        # layer_sizes[0] is the dimension of the input
+        # layer_sizes[-1] is the dimension of the output
+        def __init__(self, layer_sizes, final_relu=False):
+            super().__init__()
+            layer_list = []
+            layer_sizes = [int(x) for x in layer_sizes]
+            num_layers = len(layer_sizes) - 1
+            final_relu_layer = num_layers if final_relu else num_layers - 1
+            for i in range(len(layer_sizes) - 1):
+                input_size = layer_sizes[i]
+                curr_size = layer_sizes[i + 1]
+                if i < final_relu_layer:
+                    layer_list.append(nn.ReLU(inplace=False))
+                layer_list.append(nn.Linear(input_size, curr_size))
+            self.net = nn.Sequential(*layer_list)
+            self.last_linear = self.net[-1]
 
-#         def forward(self, x):
-#             return self.net(x)
+        def forward(self, x):
+            return self.net(x)
 
-#     def get_embedder(self, trunk_output_size : int, embed_sz : int = 64):
+    def get_embedder(self, trunk_output_size : int, embed_sz : int = 64):
 
-#         embedder = mnasnet_embedder.MLP([trunk_output_size, embed_sz])
-#         return embedder
+        embedder = mnasnet_embedder.MLP([trunk_output_size, embed_sz])
+        return embedder
             
-#     def forward(self, x):
-#         # given a batch `x` ---> generate the embedding vector
-#         x = self.trunk(x)  # Mnasnet 512 , feature extractor dims.
-#         x = self.embedder(x) # MLP get the embedding using features as input
-#         return x
+    def forward(self, x):
+        # given a batch `x` ---> generate the embedding vector
+        x = self.trunk(x)  # Mnasnet 512 , feature extractor dims.
+        x = self.embedder(x) # MLP get the embedding using features as input
+        return x
     
     
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
 
 
-#     identity_list = get_lfw_list("pairs.txt")
-#     img_paths = [os.path.join("lfw", each) for each in identity_list]
+    identity_list = get_lfw_list("pairs.txt")
+    img_paths = [os.path.join("lfw", each) for each in identity_list]
 
-#     # model.eval()
-#     model = mnasnet_embedder(train_ds = None, valid_ds = None, embed_sz = 256, batch_size = 250, image_size = 224)
-#     params = torch.load("/home/talha/Downloads/arcface_mnasnet_metric_learning/weights/last_1_epoch_last_step.ckpt")
-#     Console().log(f"following keys are present in the checkpoint ....")
-#     model.load_state_dict(params["state_dict"])
-#     model.eval()
-#     model.to(torch.device("cuda:1"))    
+    # model.eval()
+    model = mnasnet_embedder(train_ds = None, valid_ds = None, embed_sz = 256, batch_size = 250, image_size = 224)
+    params = torch.load("/home/talha/Downloads/arcface_mnasnet_metric_learning/weights/epoch=5-step=150999-last.ckpt")
+    Console().log(f"following keys are present in the checkpoint ....")
+    model.load_state_dict(params["state_dict"])
+    model.eval()
     
-#     acc = lfw_test(model, img_paths, identity_list, "pairs.txt", 32)
-#     Console().rule(title=f"Accuracy is {acc:3f}", style="green on black", characters="=")
+    
+    model.to(torch.device("cuda:1"))    
+    
+    acc = lfw_test(model, img_paths, identity_list, "pairs.txt", 32, torch.device("cuda:1"))
+    Console().rule(title=f"Accuracy is {acc:3f}", style="green on black", characters="=")
 
 
