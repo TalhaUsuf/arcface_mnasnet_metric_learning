@@ -263,7 +263,7 @@ python project/train.py --embed_sz 256 --batch_size 250 --lr_trunk 0.00001 --lr_
     ```
 
 
-# Conversion to onnx
+# Conversion to tflite
 
 ## Openvino docker[onnx ---> IR onnx representation]
 
@@ -342,3 +342,94 @@ python3 deployment_tools/model_optimizer/mo.py  \
 ```
 
 Now IR files are located at ```/home/talha/Downloads/arcface_mnasnet_metric_learning/IR_model``` 😄
+
+
+## openvino to tflite
+
+### install and run docker image
+
+To pull docker image:
+
+```bash
+ docker pull ghcr.io/pinto0309/openvino2tensorflow:latest
+```
+
+
+To run docker image, `cd` to the root folder `/home/talha/Downloads/arcface_mnasnet_metric_learning`:
+
+```bash
+xhost +local: && \
+  docker run -it --rm \
+  -v `pwd`:/home/user/workdir \
+  -v /tmp/.X11-unix/:/tmp/.X11-unix:rw \
+  --device /dev/video0:/dev/video0:mwr \
+  --net=host \
+  -e LIBVA_DRIVER_NAME=iHD \
+  -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
+  -e DISPLAY=$DISPLAY \
+  --privileged \
+  ghcr.io/pinto0309/openvino2tensorflow:latest
+```
+
+
+
+### conversion openvino IR --> tf saved model
+
+dir. structure:
+
+```
+.
+├── arcface_mnasnet_metric_learning-project
+├── balanced.csv
+├── data
+.
+.
+.
+.
+.
+├── SAVED_MODEL_TF
+│    └── saved_model.pb (copy)
+│        ├── assets
+│        ├── model_dynamic_range_quant.tflite
+│        ├── model_float16_quant.tflite
+│        ├── model_float32.tflite
+│        ├── model_full_integer_quant_edgetpu.log
+│        ├── model_full_integer_quant_edgetpu.tflite
+│        ├── model_full_integer_quant.tflite
+│        ├── model_weight_quant.tflite
+│        ├── saved_model.pb
+│        └── variables
+│
+.
+.
+.
+└── weights
+```
+
+following will convert the openvino IR model file into tf saved model 
+
+➡️ this will change `[N, C, H, W]` to `[N, H, W, C]` **without** adding *transpose , pad, transpose* before every layer and is the only way to 
+convert torch model to tflite model so far. 
+
+```bash
+openvino2tensorflow --model_path IR_model/mnasnet_arcfrace_224_rgb_3_channel_fp32.xml  \
+                    --model_output_path "SAVED_MODEL_TF/saved_model.pb (copy)/" \
+                    --output_saved_model
+```
+
+### conversion tf saved model --> tflite
+
+
+⁉️ `SAVED_MODEL_TF/saved_model.pb (copy)/` is a dir. as shown above.
+ This dir. already contains the *tf saved model* from above step. 
+
+Following will take the tf saved model and IR file to convert to float32 tflite model.
+```bash
+openvino2tensorflow --model_path IR_model/mnasnet_arcfrace_224_rgb_3_channel_fp32.xml  \
+                    --model_output_path "SAVED_MODEL_TF/saved_model.pb (copy)/" \
+                    --output_no_quant_float32_tflite
+```
+
+📡 more flags of conversion can be found here: 🔗 [openvino2tf](https://github.com/PINTO0309/openvino2tensorflow#5-usage)
+
+flags starting with --output_* decide the output format.
