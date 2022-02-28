@@ -144,3 +144,11 @@ lfw
 
 sample_npy
 SAVED_MODEL_TF/saved_model.pb
+
+
+*.pb
+*.bin
+*.xml
+*.mapping
+*.index
+*.tflite

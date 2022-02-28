@@ -5,6 +5,10 @@
 		<IR name="input" output_port_id="0" />
 	</map>
 	<map>
+		<framework name="sub_out/Fused_Add_" output_port_id="normalized_out" />
+		<IR name="sub_out/Fused_Add_" output_port_id="2" />
+	</map>
+	<map>
 		<framework name="469" output_port_id="469" />
 		<IR name="469" output_port_id="0" />
 	</map>
