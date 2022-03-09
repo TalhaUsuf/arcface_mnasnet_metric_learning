@@ -13,6 +13,7 @@ import torch.nn as nn
 import torchvision
 import os
 import numpy as np
+from pytorch_lightning.callbacks import Callback
 from rich.console import Console
 import umap
 from uuid import uuid4
@@ -27,7 +28,7 @@ import pytorch_metric_learning.utils.logging_presets as logging_presets
 from pytorch_metric_learning import losses, miners, samplers, testers, trainers
 from pytorch_metric_learning.utils import common_functions
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
-
+from lmdb_dataset import ImageFolderLMDB
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_metric_learning import losses
@@ -242,7 +243,12 @@ class mnasnet_embedder(pl.LightningModule):
         #           Making the dis-joint datasets
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # Class disjoint training and validation set
-        self.train_dataset = identities_ds(self.train_ds, self.train_transform)
+        # self.train_dataset = identities_ds(self.train_ds, self.train_transform)
+        self.train_dataset = ImageFolderLMDB(
+                                                db_path="/home/talha/metric_learning/glint360k_unpacked/val.lmdb",
+                                                transform=self.train_transform, 
+                                                target_transform=None
+                                            )
                                                     
         self.val_dataset = identities_ds(self.valid_ds, self.val_transform)
         
@@ -291,8 +297,8 @@ class mnasnet_embedder(pl.LightningModule):
         self.log("train_loss", loss, sync_dist=True)
         
         
-        
-        return {"loss" : loss}
+        # return the embeddings to be printed in the table later in callback
+        return {"loss" : loss, "vector" : embedding.tolist()}
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         # below line is necessary or it will perform testing on each mini-batch of the validation set
@@ -390,9 +396,47 @@ class mnasnet_embedder(pl.LightningModule):
         return parser
 
 
+
+# ==========================================================================
+#                             callback for plotting                                  
+# ==========================================================================
+
+class LogPredictionsCallback(Callback):
+    # REFERENCE:
+    # =========
+    # https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html#on-train-batch-end
+    def on_train_batch_end(
+        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        """Called when the validation batch ends."""
+ 
+        # `outputs` comes from `LightningModule.training_step`
+        # which have 'loss' & 'vector'
+        
+        # Let's log 20 sample image predictions from first batch
+        if batch_idx == 0:
+            # only for the ist batch, do this
+            n = 20
+            x, y = batch # [N, 3, 224, 224]
+            images = [img for img in x[:n]]
+            # make captions to show ID and loss value
+            captions = [f'ID-LABEL: {label} - Loss: {loss_}' for label, loss_ in zip(y[:n], outputs["loss"][:n])]
+            
+            # Option 1: log images with `WandbLogger.log_image`
+            trainer.logger.log_image(key='Sample images [current batch]', images=images, caption=captions)
+
+            # Option 2: log predictions as a Table
+            columns = ['image', 'ID-LABEL', 'vector', 'loss']
+            data = [[wandb.Image(img), label_, vec, loss_] for img, label_, vec, loss_ in list(zip(x[:n], y[:n], outputs["vector"][:n], outputs["loss"][:n]))]
+            trainer.logger.log_table(key='Current Batch Live Details', columns=columns, data=data)
+
+
+
+
+
 def cli_main(args=None):
    
-    run = wandb.init(id='2i4p43ar', resume="must") # needed for wandb.watch
+    # run = wandb.init(id='2i4p43ar', resume="must") # needed for wandb.watch
+    run = wandb.init() # needed for wandb.watch
     wandb.login()
 
     pl.seed_everything(1234)
@@ -414,8 +458,8 @@ def cli_main(args=None):
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #                      code artifact
     # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
-    # wandb.run.log_code(".")  # all python files in current dir. are uploaded
+    # wandb.run.log_code("./project/*.py")  # all python files in current dir. are uploaded
+    wandb.run.log_code(".")  # all python files in current dir. are uploaded
     
     model = mnasnet_embedder(**vars(args))
    
@@ -423,7 +467,8 @@ def cli_main(args=None):
     wandb_logger = WandbLogger(project='Arcface-FaceRecognition-glint', 
                            config=vars(args),
                            group='face-recognition', 
-                           job_type='train')
+                           job_type='train',
+                           log_model="all")
     wandb.watch(
             model, criterion=None, log="all",
             log_graph=True, log_freq=50

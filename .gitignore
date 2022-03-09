@@ -152,3 +152,4 @@ SAVED_MODEL_TF/saved_model.pb
 *.mapping
 *.index
 *.tflite
+*.jpg
